@@ -3,7 +3,6 @@ package tracer
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -71,12 +70,7 @@ func (s *Span) End() {
 		s.Error(err)
 		s.Span.End()
 
-		if cfg.panicFunc != nil {
-			func(r any) {
-				defer recover()
-				cfg.panicFunc(r)
-			}(r)
-		}
+		// NOTE: add your custom panic handling logic here, e.g., logging
 
 		return
 	}
@@ -104,12 +98,8 @@ func (s *Span) SError(msg string) {
 func (s *Span) Error(err error) {
 	if err != nil {
 		s.Span.RecordError(err)
-		if cfg.errorFunc != nil {
-			if newErr := cfg.errorFunc(err); newErr != nil {
-				err = newErr
-			}
-		}
 		s.Span.SetStatus(codes.Error, err.Error())
+		// NOTE: add your custom error handling logic here
 	}
 }
 
