@@ -32,16 +32,45 @@ type spanEvents struct {
 	timestamp *time.Time
 }
 
+var (
+	kindMap = map[string]trace.SpanKind{
+		"internal": trace.SpanKindInternal,
+		"server":   trace.SpanKindServer,
+		"client":   trace.SpanKindClient,
+		"producer": trace.SpanKindProducer,
+		"consumer": trace.SpanKindConsumer,
+	}
+)
+
+type startOptions struct {
+	Kind       string
+	TracerName string
+}
+
 func NewAttrs() *spanAttributes {
 	return &spanAttributes{}
 }
 
-func New(ctx context.Context, spanName string, tracerArgs ...string) *Span {
-	ctx, span := otel.Tracer("").Start(ctx, spanName)
+func New(ctx context.Context, spanName string, tracerArgs ...startOptions) *Span {
+	opt := startOptions{}
+	kind := trace.SpanKindInternal
+
+	if len(tracerArgs) > 0 {
+		opt = tracerArgs[0]
+		if spanKind, ok := kindMap[opt.Kind]; ok {
+			kind = spanKind
+		}
+	}
+
+	ctx, span := otel.Tracer(opt.TracerName).Start(ctx, spanName, trace.WithSpanKind(kind))
 	return &Span{Ctx: ctx, Span: span}
 }
 
 func (s *Span) TraceID() string {
+	return s.Span.SpanContext().TraceID().String()
+}
+
+func (s *Span) SpanID() string {
 	return s.Span.SpanContext().SpanID().String()
 }
 
@@ -95,9 +124,12 @@ func (s *Span) SError(msg string) {
 	s.Span.SetStatus(codes.Error, msg)
 }
 
-func (s *Span) Error(err error) {
+func (s *Span) Error(err error, recordError ...bool) {
 	if err != nil {
-		s.Span.RecordError(err)
+		if len(recordError) > 0 && recordError[0] {
+			s.Span.RecordError(err)
+		}
+
 		s.Span.SetStatus(codes.Error, err.Error())
 		// NOTE: add your custom error handling logic here
 	}
